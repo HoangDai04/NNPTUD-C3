@@ -1,125 +1,123 @@
-var express = require('express');
+var express = require("express");
 var router = express.Router();
-let productModel = require('../schemas/products');//dbContext
-const { default: slugify } = require('slugify');
+let productModel = require("../schemas/products");
+const slugify = require("slugify"); // ❌ bỏ destructuring sai
 
-/* GET users listing. */
-router.get('/', async function (req, res, next) {
-  let queries = req.query;
-  let minPrice = queries.minprice ? queries.minprice : 0;
-  let maxPrice = queries.maxprice ? queries.maxprice : 10000;
-  let titleQ = queries.title ? queries.title : '';
-  let result = await productModel.find({
-    isDeleted: false,
-    title: new RegExp(titleQ,'i'),
-    price:{
-      $gte:minPrice,
-      $lte:maxPrice
-    }
-  }).populate({
-    path:'category',
-    select:'name'
-  })
-  // result = result.filter(
-  //   function (e) {
-  //     return e.price >= minPrice && e.price <= maxPrice
-  //       && e.title.toLowerCase().includes(titleQ.toLowerCase())
-  //   }
-  // )
-  res.send(result);
+// GET ALL
+router.get("/", async function (req, res, next) {
+  try {
+    let queries = req.query;
+    let minPrice = queries.minprice ? queries.minprice : 0;
+    let maxPrice = queries.maxprice ? queries.maxprice : 10000;
+    let titleQ = queries.title ? queries.title : "";
+
+    let result = await productModel
+      .find({
+        isDeleted: false,
+        title: new RegExp(titleQ, "i"),
+        price: {
+          $gte: minPrice,
+          $lte: maxPrice,
+        },
+      })
+      .populate({
+        path: "category",
+        select: "name",
+      });
+
+    res.send(result);
+  } catch (error) {
+    res.status(500).send({ message: error.message });
+  }
 });
 
-router.get('/:id', async function (req, res, next) {
+// GET BY ID
+router.get("/:id", async function (req, res, next) {
   try {
     let id = req.params.id;
+
     let result = await productModel.findOne({
       isDeleted: false,
-      _id: id
-    })
+      _id: id,
+    });
+
     if (result) {
       res.send(result);
     } else {
       res.status(404).send({ message: "ID NOT FOUND" });
     }
   } catch (error) {
-    res.status(404).send({ message: error.message });
+    res.status(400).send({ message: error.message });
   }
 });
 
-router.post('/', async function (req, res, next) {
-  let newProduct = new productModel({
-    title: req.body.title,
-    slug: slugify(req.body.title, {
-      replacement: '-',
-      remove: undefined,
-      lower: true,
-      strict: false,
-    }),
-    price: req.body.price,
-    description: req.body.description,
-    category: req.body.category,
-    images: req.body.images
-  });
-  await newProduct.save();
-  res.send(newProduct)
-})
-router.put('/:id', async function (req, res, next) {
+// CREATE PRODUCT
+router.post("/", async function (req, res, next) {
+  try {
+    // 🚨 validate
+    if (!req.body.title) {
+      return res.status(400).send({ message: "title is required" });
+    }
+
+    let newProduct = new productModel({
+      title: req.body.title,
+      slug: slugify(req.body.title.toString(), {
+        lower: true,
+      }),
+      price: req.body.price || 0,
+      description: req.body.description || "",
+      category: req.body.category || null,
+      images: req.body.images || [],
+    });
+
+    await newProduct.save();
+
+    res.send(newProduct);
+  } catch (error) {
+    res.status(500).send({ message: error.message });
+  }
+});
+
+// UPDATE
+router.put("/:id", async function (req, res, next) {
   try {
     let id = req.params.id;
-    //c1
-    // let result = await productModel.findOne({
-    //   isDeleted: false,
-    //   _id: id
-    // })
-    // if (result) {
-    //   let keys = Object.keys(req.body);
-    //   for (const key of keys) {
-    //     result[key] = req.body[key]
-    //   }
-    //   await result.save()
-    //   res.send(result)
-    // }
-    // else {
-    //   res.status(404).send({ message: "ID NOT FOUND" });
-    // }
-    //c2
+
+    // nếu có title thì update slug
+    if (req.body.title) {
+      req.body.slug = slugify(req.body.title.toString(), {
+        lower: true,
+      });
+    }
+
     let updatedItem = await productModel.findByIdAndUpdate(id, req.body, {
-      new: true
+      new: true,
     });
-    res.send(updatedItem)
+
+    res.send(updatedItem);
   } catch (error) {
-    res.status(404).send({ message: error.message });
+    res.status(400).send({ message: error.message });
   }
 });
 
-router.delete('/:id', async function (req, res, next) {
+// DELETE (SOFT DELETE)
+router.delete("/:id", async function (req, res, next) {
   try {
     let id = req.params.id;
-    //c1
-    // let result = await productModel.findOne({
-    //   isDeleted: false,
-    //   _id: id
-    // })
-    // if (result) {
-    //   let keys = Object.keys(req.body);
-    //   for (const key of keys) {
-    //     result[key] = req.body[key]
-    //   }
-    //   await result.save()
-    //   res.send(result)
-    // }
-    // else {
-    //   res.status(404).send({ message: "ID NOT FOUND" });
-    // }
-    //c2
-    let updatedItem = await productModel.findByIdAndUpdate(id, {
-      isDeleted: true
-    }, {
-      new: true
-    });
-    res.send(updatedItem)
+
+    let updatedItem = await productModel.findByIdAndUpdate(
+      id,
+      {
+        isDeleted: true,
+      },
+      {
+        new: true,
+      },
+    );
+
+    res.send(updatedItem);
   } catch (error) {
-    res.status(404).send({ message: error.message });
+    res.status(400).send({ message: error.message });
   }
 });
 
